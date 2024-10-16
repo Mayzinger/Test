@@ -80,9 +80,8 @@ val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0
 
 // Указываем корневой путь для сохранения файлов
 val baseOutputPath = "/path/to/output/csv_files"
-val zipPath = "/path/to/output/zipped_files/output_archive.zip"
 
-// Для каждой партиции фильтруем данные и сохраняем в отдельный CSV-файл
+// Для каждой партиции фильтруем данные, сохраняем в отдельный CSV-файл и упаковываем в ZIP
 partitions.foreach { partValue =>
   val partitionDF = renamedDF.filter(s"part = '$partValue'")
   val partitionOutputPath = s"$baseOutputPath/$partValue"
@@ -92,14 +91,15 @@ partitions.foreach { partValue =>
     .mode("overwrite")
     .option("header", "true")
     .csv(partitionOutputPath)
+
+  // Упаковываем CSV-файл в отдельный ZIP-архив
+  val zipPath = s"$baseOutputPath/${partValue}.zip"
+  val zipCommand = s"zip -r $zipPath $partitionOutputPath"
+  zipCommand.!
+
+  // Удаляем исходную папку CSV после упаковки
+  new File(partitionOutputPath).listFiles().foreach(_.delete())
+  new File(partitionOutputPath).delete()
 }
-
-// Упаковываем все файлы в ZIP-архив
-val zipCommand = s"zip -r $zipPath $baseOutputPath"
-zipCommand.!
-
-// Опционально удаляем исходные CSV-файлы после упаковки
-new File(baseOutputPath).listFiles().foreach(_.delete())
-new File(baseOutputPath).delete()
 
 spark.stop()
