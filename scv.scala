@@ -92,7 +92,7 @@ partitions.foreach { partValue =>
     .mode("overwrite")
     .option("header", "true")
     .option("encoding", "windows-1251")
-    .option("delimiter", "\u00A6")  // Символ разделителя |
+    .option("delimiter", "\u0166")  // Символ разделителя |
     .csv(partitionOutputPath)
 
   // Упаковываем CSV-файл в отдельный ZIP-архив
