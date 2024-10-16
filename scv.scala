@@ -65,14 +65,26 @@ val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0
 
 val baseOutputPath = "/user/rb068198/cbr/csv_files"
 
-partitions.foreach { partValue => 
-  val partitionDF = renamedDF.filter(s"part = '$partValue'").drop("part").coalesce(1)
+partitions.foreach { partValue =>
+  val partitionDF = renamedDF.filter(s"part = '$partValue'").drop("part") 
   val tempPath = s"$baseOutputPath/temp_$partValue"
   val finalFilePath = s"$baseOutputPath/$partValue.csv"
+  
+  // Сохраняем DataFrame в несколько файлов в временную папку
   partitionDF.write.mode("overwrite").option("header", "true").option("encoding", "windows-1251").option("delimiter", "\u00A6").csv(tempPath)
+  
+  // Объединяем все файлы в временной папке в один
+  val finalFileWriter = new FileWriter(finalFilePath, true)
   val tempDir = new File(tempPath)
-  val tempFile = tempDir.listFiles().find(_.getName.endsWith(".csv")).get
-  Files.move(tempFile.toPath, Paths.get(finalFilePath), StandardCopyOption.REPLACE_EXISTING)
+  tempDir.listFiles().filter(_.getName.endsWith(".csv")).sorted.foreach { file =>
+    val source = Source.fromFile(file, "windows-1251")
+    source.getLines().foreach(line => finalFileWriter.write(line + "\n"))
+    source.close()
+  }
+  finalFileWriter.close()
+  
+  // Удаляем временную папку
+  tempDir.listFiles().foreach(_.delete())
   tempDir.delete()
 }
 
