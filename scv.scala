@@ -1,7 +1,9 @@
 import org.apache.spark.sql.SparkSession
-import java.io.{File, FileWriter}
-import java.nio.file.{Files, Paths, StandardCopyOption}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 import scala.io.Source
+import java.io.{File, InputStreamReader, BufferedReader}
+import java.nio.file.Files
 
 val spark = SparkSession.builder().appName("Export Hive Table by Partition with Custom Column Names").enableHiveSupport().getOrCreate()
 
@@ -66,6 +68,9 @@ val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0
 
 val baseOutputPath = "/user/rb068198/cbr/csv_files"
 
+val hadoopConfig = new Configuration()
+val hdfs = FileSystem.get(hadoopConfig)
+
 partitions.foreach { partValue =>
   val partitionDF = renamedDF.filter(s"part = '$partValue'").drop("part")
   val tempPath = s"$baseOutputPath/temp_$partValue"
@@ -74,15 +79,15 @@ partitions.foreach { partValue =>
   // Сохраняем DataFrame в несколько файлов в временную папку
   partitionDF.write.mode("overwrite").option("header", "true").option("encoding", "windows-1251").option("delimiter", "\u00A6").csv(tempPath)
 
-  // Объединяем все файлы в временной папке в один
-  val finalFileWriter = new FileWriter(finalFilePath, true)
+  // Объединяем все файлы в временной папке в один в HDFS
+  val outputStream = hdfs.create(new Path(finalFilePath))
   val tempDir = new File(tempPath)
   tempDir.listFiles().filter(_.getName.endsWith(".csv")).sorted.foreach { file =>
     val source = Source.fromFile(file, "windows-1251")
-    source.getLines().foreach(line => finalFileWriter.write(line + "\n"))
+    source.getLines().foreach(line => outputStream.writeBytes(line + "\n"))
     source.close()
   }
-  finalFileWriter.close()
+  outputStream.close()
 
   // Удаляем временную папку
   tempDir.listFiles().foreach(_.delete())
@@ -90,11 +95,3 @@ partitions.foreach { partValue =>
 }
 
 spark.stop()
-
-
-scala> val finalFileWriter = new FileWriter(finalFilePath, true)
-java.io.FileNotFoundException: /user/rb068198/cbr/csv_files/1240902.csv (No such file or directory)
-  at java.io.FileOutputStream.open0(Native Method)
-  at java.io.FileOutputStream.open(FileOutputStream.java:270)
-  ... 45 elided
-
