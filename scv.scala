@@ -101,7 +101,8 @@ partitions.foreach { partValue =>
   val zipOutStream = new ZipOutputStream(hdfs.create(new Path(zipFilePath)))
   zipOutStream.putNextEntry(new ZipEntry(s"$partValue.csv"))
   val csvSource = hdfs.open(new Path(finalFilePath))
-  val buffer = new Array= csvSource.read(buffer)
+  val buffer = new Array 
+  var len = csvSource.read(buffer)
   while (len > 0) {
     zipOutStream.write(buffer, 0, len)
     len = csvSource.read(buffer)
