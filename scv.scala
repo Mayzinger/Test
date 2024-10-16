@@ -1,6 +1,6 @@
 import org.apache.spark.sql.SparkSession
 import java.io.File
-import scala.sys.process._
+import java.nio.file.{Files, Paths, StandardCopyOption}
 
 // Инициализируем сессию Spark
 val spark = SparkSession.builder()
@@ -82,27 +82,35 @@ val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0
 // Указываем корневой путь для сохранения файлов
 val baseOutputPath = "/user/rb068198/cbr/csv_files"
 
-// Для каждой партиции фильтруем данные, сохраняем в отдельный CSV-файл и упаковываем в ZIP
+// Для каждой партиции фильтруем данные, удаляем столбец part, объединяем в один файл и сохраняем с именем, соответствующим значению партиции
 partitions.foreach { partValue =>
   val partitionDF = renamedDF.filter(s"part = '$partValue'")
-  val partitionOutputPath = s"$baseOutputPath/$partValue"
+                             .drop("part")    // Удаляем поле part
+                             .coalesce(1)     // Объединяем в один файл
+  
+  // Временный путь для сохранения
+  val tempPath = s"$baseOutputPath/temp_$partValue"
+  
+  // Итоговый путь к файлу с именем партиции
+  val finalFilePath = s"$baseOutputPath/$partValue.csv"
 
-  // Сохраняем DataFrame для данной партиции в CSV с нужной кодировкой и разделителем
+  // Сохраняем DataFrame для данной партиции в временную папку с нужной кодировкой и разделителем
   partitionDF.write
     .mode("overwrite")
     .option("header", "true")
     .option("encoding", "windows-1251")
-    .option("delimiter", "\u0166")  // Символ разделителя ¦
-    .csv(partitionOutputPath)
+    .option("delimiter", "\u00A6")  // Символ разделителя ¦ (код 0166)
+    .csv(tempPath)
 
-  // Упаковываем CSV-файл в отдельный ZIP-архив
-  val zipPath = s"$baseOutputPath/${partValue}.zip"
-  val zipCommand = s"zip -r $zipPath $partitionOutputPath"
-  zipCommand.!
+  // Находим сгенерированный CSV-файл в временной папке и переименовываем его
+  val tempDir = new File(tempPath)
+  val tempFile = tempDir.listFiles().find(_.getName.endsWith(".csv")).get
 
-  // Удаляем исходную папку CSV после упаковки
-  new File(partitionOutputPath).listFiles().foreach(_.delete())
-  new File(partitionOutputPath).delete()
+  // Перемещаем файл в нужное место с нужным именем
+  Files.move(tempFile.toPath, Paths.get(finalFilePath), StandardCopyOption.REPLACE_EXISTING)
+
+  // Удаляем временную папку
+  tempDir.delete()
 }
 
 spark.stop()
