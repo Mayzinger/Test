@@ -3,10 +3,7 @@ import java.io.File
 import java.nio.file.{Files, Paths, StandardCopyOption}
 
 // Инициализируем сессию Spark
-val spark = SparkSession.builder()
-  .appName("Export Hive Table by Partition with Custom Column Names")
-  .enableHiveSupport()
-  .getOrCreate()
+val spark = SparkSession.builder().appName("Export Hive Table by Partition with Custom Column Names").enableHiveSupport().getOrCreate()
 
 // Выполняем SQL-запрос для получения данных
 val df = spark.sql("""
