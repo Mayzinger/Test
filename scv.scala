@@ -80,7 +80,7 @@ val renamedDF = newColumnNames.foldLeft(df)((tempDF, names) => tempDF.withColumn
 val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0))
 
 // Указываем корневой путь для сохранения файлов
-val baseOutputPath = "/path/to/output/csv_files"
+val baseOutputPath = "/user/rb068198/cbr/csv_files"
 
 // Для каждой партиции фильтруем данные, сохраняем в отдельный CSV-файл и упаковываем в ZIP
 partitions.foreach { partValue =>
