@@ -1,9 +1,9 @@
 import org.apache.spark.sql.SparkSession
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.{FileSystem, Path, FileStatus}
+import java.io.{InputStreamReader, BufferedReader}
+import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.io.Source
-import java.io.{File, InputStreamReader, BufferedReader}
-import java.nio.file.Files
 
 val spark = SparkSession.builder().appName("Export Hive Table by Partition with Custom Column Names").enableHiveSupport().getOrCreate()
 
@@ -75,23 +75,45 @@ partitions.foreach { partValue =>
   val partitionDF = renamedDF.filter(s"part = '$partValue'").drop("part")
   val tempPath = s"$baseOutputPath/temp_$partValue"
   val finalFilePath = s"$baseOutputPath/$partValue.csv"
+  val zipFilePath = s"$baseOutputPath/$partValue.zip"
 
   // Сохраняем DataFrame в несколько файлов в временную папку
   partitionDF.write.mode("overwrite").option("header", "true").option("encoding", "windows-1251").option("delimiter", "\u00A6").csv(tempPath)
 
   // Объединяем все файлы в временной папке в один в HDFS
   val outputStream = hdfs.create(new Path(finalFilePath))
-  val tempDir = new File(tempPath)
-  tempDir.listFiles().filter(_.getName.endsWith(".csv")).sorted.foreach { file =>
-    val source = Source.fromFile(file, "windows-1251")
-    source.getLines().foreach(line => outputStream.writeBytes(line + "\n"))
-    source.close()
+  val tempFiles: Array[FileStatus] = hdfs.listStatus(new Path(tempPath)).filter(_.getPath.getName.endsWith(".csv"))
+
+  tempFiles.foreach { fileStatus =>
+    val inputStream = hdfs.open(fileStatus.getPath)
+    val bufferedReader = new BufferedReader(new InputStreamReader(inputStream, "windows-1251"))
+    var line = bufferedReader.readLine()
+    while (line != null) {
+      outputStream.writeBytes(line + "\n")
+      line = bufferedReader.readLine()
+    }
+    bufferedReader.close()
+    inputStream.close()
   }
   outputStream.close()
 
-  // Удаляем временную папку
-  tempDir.listFiles().foreach(_.delete())
-  tempDir.delete()
+  // Упаковываем в zip-файл
+  val zipOutStream = new ZipOutputStream(hdfs.create(new Path(zipFilePath)))
+  zipOutStream.putNextEntry(new ZipEntry(s"$partValue.csv"))
+  val csvSource = hdfs.open(new Path(finalFilePath))
+  val buffer = new Array= csvSource.read(buffer)
+  while (len > 0) {
+    zipOutStream.write(buffer, 0, len)
+    len = csvSource.read(buffer)
+  }
+  csvSource.close()
+  zipOutStream.closeEntry()
+  zipOutStream.close()
+
+  // Удаляем временную папку и CSV-файл
+  tempFiles.foreach(fileStatus => hdfs.delete(fileStatus.getPath, true))
+  hdfs.delete(new Path(finalFilePath), true)
+  hdfs.delete(new Path(tempPath), true)
 }
 
 spark.stop()
