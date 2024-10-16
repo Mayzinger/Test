@@ -1,6 +1,7 @@
 import org.apache.spark.sql.SparkSession
-import java.io.File
+import java.io.{File, FileWriter}
 import java.nio.file.{Files, Paths, StandardCopyOption}
+import scala.io.Source
 
 val spark = SparkSession.builder().appName("Export Hive Table by Partition with Custom Column Names").enableHiveSupport().getOrCreate()
 
@@ -66,13 +67,13 @@ val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0
 val baseOutputPath = "/user/rb068198/cbr/csv_files"
 
 partitions.foreach { partValue =>
-  val partitionDF = renamedDF.filter(s"part = '$partValue'").drop("part") 
+  val partitionDF = renamedDF.filter(s"part = '$partValue'").drop("part")
   val tempPath = s"$baseOutputPath/temp_$partValue"
   val finalFilePath = s"$baseOutputPath/$partValue.csv"
-  
+
   // Сохраняем DataFrame в несколько файлов в временную папку
   partitionDF.write.mode("overwrite").option("header", "true").option("encoding", "windows-1251").option("delimiter", "\u00A6").csv(tempPath)
-  
+
   // Объединяем все файлы в временной папке в один
   val finalFileWriter = new FileWriter(finalFilePath, true)
   val tempDir = new File(tempPath)
@@ -82,7 +83,7 @@ partitions.foreach { partValue =>
     source.close()
   }
   finalFileWriter.close()
-  
+
   // Удаляем временную папку
   tempDir.listFiles().foreach(_.delete())
   tempDir.delete()
