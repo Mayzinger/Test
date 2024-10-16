@@ -2,6 +2,7 @@ import org.apache.spark.sql.SparkSession
 import java.io.File
 import scala.sys.process._
 
+// Инициализируем сессию Spark
 val spark = SparkSession.builder()
   .appName("Export Hive Table by Partition with Custom Column Names")
   .enableHiveSupport()
@@ -72,8 +73,8 @@ val newColumnNames = Map(
   "50" -> "Аббревиатура товара"
 )
 
-// Переименовываем столбцы
-val renamedDF = newColumnNames.foldLeft(df)((df, names) => df.withColumnRenamed(names._1, names._2))
+// Переименовываем столбцы в DataFrame
+val renamedDF = newColumnNames.foldLeft(df)((tempDF, names) => tempDF.withColumnRenamed(names._1, names._2))
 
 // Получаем уникальные значения из поля партиции 'part'
 val partitions = renamedDF.select("part").distinct().collect().map(_.getString(0))
@@ -86,10 +87,12 @@ partitions.foreach { partValue =>
   val partitionDF = renamedDF.filter(s"part = '$partValue'")
   val partitionOutputPath = s"$baseOutputPath/$partValue"
 
-  // Сохраняем DataFrame для данной партиции в CSV с заголовками
+  // Сохраняем DataFrame для данной партиции в CSV с нужной кодировкой и разделителем
   partitionDF.write
     .mode("overwrite")
     .option("header", "true")
+    .option("encoding", "windows-1251")
+    .option("delimiter", "\u00A6")  // Символ разделителя |
     .csv(partitionOutputPath)
 
   // Упаковываем CSV-файл в отдельный ZIP-архив
