@@ -90,3 +90,7 @@ partitions.foreach { partValue =>
 }
 
 spark.stop()
+
+
+val finalFileWriter = new FileWriter(finalFilePath, true)
+java.io.FileNotFoundException: /user/rb068198/cbr/csv_files/1240902.csv (No such file or directory)
